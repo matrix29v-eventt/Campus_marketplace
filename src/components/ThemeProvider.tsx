@@ -15,16 +15,22 @@ const ThemeContext = createContext<ThemeContextType>({
 })
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme") as Theme | null
-      if (stored) return stored
-      if (window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark"
-    }
-    return "light"
-  })
+  const [theme, setTheme] = useState<Theme>("light")
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+    const stored = localStorage.getItem("theme") as Theme | null
+    if (stored) {
+      setTheme(stored)
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      setTheme("dark")
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
     const root = document.documentElement
     if (theme === "dark") {
       root.classList.add("dark")
@@ -32,9 +38,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       root.classList.remove("dark")
     }
     localStorage.setItem("theme", theme)
-  }, [theme])
+  }, [theme, mounted])
 
   const toggleTheme = () => setTheme((prev) => (prev === "light" ? "dark" : "light"))
+
+  if (!mounted) return <>{children}</>
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>

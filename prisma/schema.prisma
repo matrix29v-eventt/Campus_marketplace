@@ -1,0 +1,318 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  ALUMNI
+  ADMIN
+}
+
+enum ProductCategory {
+  TEXTBOOKS
+  LAB_RECORDS
+  CALCULATORS
+  DRAWING_INSTRUMENTS
+  FURNITURE
+  ELECTRONICS
+  CLOTHING
+  STATIONERY
+  CYCLES
+  OTHER
+}
+
+enum ProductCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+  POOR
+}
+
+enum ProductType {
+  SELL
+  EXCHANGE
+  DONATE
+  RENT
+}
+
+enum GroupBuyStatus {
+  ACTIVE
+  FULFILLED
+  CANCELLED
+}
+
+enum OfferStatus {
+  PENDING
+  COUNTERED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum LostFoundStatus {
+  LOST
+  FOUND
+  CLAIMED
+  RESOLVED
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  password      String
+  department    String?
+  year          Int?
+  college       String   @default("College of Engineering, Trivandrum")
+  role          UserRole @default(STUDENT)
+  isVerified    Boolean  @default(false)
+  greenPoints   Int      @default(0)
+  itemsReused   Int      @default(0)
+  treesSaved    Float    @default(0)
+  wasteReduced  Float    @default(0)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  products         Product[]
+  purchases        Transaction[]  @relation("Buyer")
+  sales            Transaction[]  @relation("Seller")
+  sentMessages     Message[]      @relation("Sender")
+  receivedMessages Message[]      @relation("Receiver")
+  sustainabilityLogs SustainabilityLog[]
+  organizedGroupBuys GroupBuy[]    @relation("Organizer")
+  groupBuyParticipations GroupBuyParticipant[]
+  madeOffers       Offer[]        @relation("OfferBuyer")
+  receivedOffers   Offer[]        @relation("OfferSeller")
+  reportedLostFound LostFoundItem[] @relation("Reporter")
+  claimedLostFound LostFoundItem[] @relation("Claimant")
+  bundles          Bundle[]
+
+  @@map("users")
+}
+
+model Product {
+  id            String           @id @default(cuid())
+  title         String
+  description   String
+  price         Float?
+  category      ProductCategory
+  condition     ProductCondition
+  type          ProductType      @default(SELL)
+  images        String[]
+  department    String?
+  year          Int?
+  courseCode    String?
+  isFeatured    Boolean          @default(false)
+  featuredUntil DateTime?
+  isAvailable   Boolean          @default(true)
+  rentalPrice   Float?
+  rentalPeriod  String?
+  sellerId      String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  seller       User          @relation(fields: [sellerId], references: [id])
+  transactions Transaction[]
+  wishlistEntries Wishlist[]
+  groupBuys    GroupBuy[]
+  offers       Offer[]
+  bundleItems  BundleItem[]
+
+  @@index([category])
+  @@index([type])
+  @@index([department])
+  @@index([sellerId])
+  @@index([courseCode])
+  @@map("products")
+}
+
+model Transaction {
+  id              String            @id @default(cuid())
+  productId       String
+  buyerId         String
+  sellerId        String
+  type            ProductType
+  status          TransactionStatus @default(PENDING)
+  exchangeProductId String?
+  rentalStart     DateTime?
+  rentalEnd       DateTime?
+  amount          Float?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  product         Product   @relation(fields: [productId], references: [id])
+  buyer           User      @relation("Buyer", fields: [buyerId], references: [id])
+  seller          User      @relation("Seller", fields: [sellerId], references: [id])
+
+  @@map("transactions")
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  productId  String?
+  content    String
+  image      String?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User   @relation("Sender", fields: [senderId], references: [id])
+  receiver User   @relation("Receiver", fields: [receiverId], references: [id])
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([productId])
+  @@map("messages")
+}
+
+model SustainabilityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String
+  points      Int
+  itemsCount  Int
+  description String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("sustainability_logs")
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+  @@map("wishlists")
+}
+
+model GroupBuy {
+  id              String         @id @default(cuid())
+  productId       String
+  organizerId     String
+  minParticipants Int
+  maxParticipants Int?
+  discountPercent Float
+  dealPrice       Float
+  status          GroupBuyStatus @default(ACTIVE)
+  expiresAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  product      Product               @relation(fields: [productId], references: [id])
+  organizer    User                  @relation("Organizer", fields: [organizerId], references: [id])
+  participants GroupBuyParticipant[]
+
+  @@index([status])
+  @@index([productId])
+  @@map("group_buys")
+}
+
+model GroupBuyParticipant {
+  id         String   @id @default(cuid())
+  groupBuyId String
+  userId     String
+  joinedAt   DateTime @default(now())
+
+  groupBuy GroupBuy @relation(fields: [groupBuyId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([groupBuyId, userId])
+  @@map("group_buy_participants")
+}
+
+model Offer {
+  id             String       @id @default(cuid())
+  productId      String
+  buyerId        String
+  sellerId       String
+  amount         Float
+  message        String?
+  status         OfferStatus  @default(PENDING)
+  counterAmount  Float?
+  counterMessage String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+  buyer   User    @relation("OfferBuyer", fields: [buyerId], references: [id])
+  seller  User    @relation("OfferSeller", fields: [sellerId], references: [id])
+
+  @@index([productId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@map("offers")
+}
+
+model LostFoundItem {
+  id          String           @id @default(cuid())
+  title       String
+  description String
+  category    String
+  location    String?
+  date        DateTime?
+  images      String[]
+  status      LostFoundStatus  @default(LOST)
+  reporterId  String
+  claimantId  String?
+  contactInfo String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  reporter User  @relation("Reporter", fields: [reporterId], references: [id])
+  claimant User? @relation("Claimant", fields: [claimantId], references: [id])
+
+  @@index([status])
+  @@index([category])
+  @@map("lost_found_items")
+}
+
+model Bundle {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  price       Float?
+  sellerId    String
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  seller User         @relation(fields: [sellerId], references: [id])
+  items  BundleItem[]
+
+  @@index([sellerId])
+  @@map("bundles")
+}
+
+model BundleItem {
+  id        String @id @default(cuid())
+  bundleId  String
+  productId String
+
+  bundle  Bundle  @relation(fields: [bundleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([bundleId, productId])
+  @@map("bundle_items")
+}
